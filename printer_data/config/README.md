@@ -20,9 +20,9 @@ The following is a list of current components:
 - Toolboard: [HUVUD v62](https://www.lukeslabonline.com/products/huvud?srsltid=AfmBOopEAh4QOpoMUqAeWhaTBG-vQzWRpcosn5MS7Hgkb8bIckftSSv-) - Simplifies wiring to the toolhead by using CAN bus
 - Probe: [Beacon D](https://beacon3d.com/product/beacon/) - Eddy current sensor for mesh bed compensation
 - Extruder: [Bondtech LGX Lite v1](https://www.bondtech.se/product/lgx-lite-large-gears-extruder/?srsltid=AfmBOoqgWDClp8ee0Q8WN4uUiA37GEp0CGhkhtcDBhZUndZCOz_L350P) - Extruder driven by toolboard
-- Hotend: [Phaetus Papido HF 1.75"](https://www.phaetus.com/products/rapido-hotend) - High flow hotend
-- Bed & Heater: [FYSETC 255mm](https://www.fysetc.com/collections/build-plate?srsltid=AfmBOoqMgZ_5Tl_YJqbWfPQtra7XZMAf-IZySl2OC9-75eakVQTpeYrE) - 110VAC AC heater controlled with SRR, JANUS BPS-PET Steel Sheet with Mic6 Metal Plate Silicone Heat Bed Andmagnetic Sticker for ZEROG 
-- X-Y Steppers: [Ldo 42STH48-2504AH](https://www.fabreeko.com/products/ldo-42sth48-2504ah-high-temp?srsltid=AfmBOoodsxMzFuTsef1rY_hdTcE-_lMs57thaipDaFKRzZfVEwxLG4EP) - X and Y Steppers
+- Hotend: [Phaetus Rapido HF 1.75"](https://www.phaetus.com/products/rapido-hotend) - High flow hotend
+- Bed & Heater: [FYSETC 255mm](https://www.fysetc.com/collections/build-plate?srsltid=AfmBOoqMgZ_5Tl_YJqbWfPQtra7XZMAf-IZySl2OC9-75eakVQTpeYrE) - 110VAC AC heater controlled with SSR, JANUS BPS-PET Steel Sheet with Mic6 Metal Plate Silicone Heat Bed Andmagnetic Sticker for ZEROG 
+- X-Y Steppers: [Ldo 42STH48-2504AH](https://www.fabreeko.com/products/ldo-42sth48-2504ah-high-temp?srsltid=AfmBOoodsxMzFuTsef1rY_hdTcE-_lMs57thaipDaFKRzZfVEwxLG4EP) - X and Y Steppers, 2.5A rated (purchased 2023-04-05)
 - Z1 & Z2 Steppers: [Creality 42-34](https://www.creality3dofficial.com/products/2pcs-ce-certification-2phase-reprap-stepper-motor-42-motor-42-40-3d-printer?srsltid=AfmBOornuw2jv8F69XxVZhaaLflQldGlQWgPeZK1NleKhOC-i5QyUVHl) - Reuse from Ender 5
 - Z Stepper: [Creality 42-40(S)](https://www.creality3dofficial.com/products/2pcs-ce-certification-2phase-reprap-stepper-motor-42-motor-42-40-3d-printer?srsltid=AfmBOornuw2jv8F69XxVZhaaLflQldGlQWgPeZK1NleKhOC-i5QyUVHl) - Reuse from Ender 5
 
@@ -30,59 +30,30 @@ The following is a list of current components:
 ## Firmware Installation
 
 
-### Update Firmware on Duet Mini 5+:
-https://www.klipper3d.org/Installation.html
+Both boards run at **1 Mbit CAN**. The Duet is a USB-to-CAN bridge, so its compiled CAN speed sets the bus
+speed; the bitrate in `/etc/network/interfaces.d/can0` is ignored. Build configs are saved on the Pi, so
+there is no need to re-enter `make menuconfig`. **Order: HUVUD first, Duet last.**
+
+### HUVUD Firmware (Katapult bootloader at 1M, since 2026-10-24)
 
 ```sh
-Double tap the reset button so you see flashing red LED
-
-Get the Device ID using the following:
-ls /dev/serial/by-id/*
-
-Note: By default the can0, mini5, and huvud are all set to 250K speed need to first flash huvud to 1000k, then mini5, then change can0 to be the same
-
 cd ~/klipper
-make menuconfig
-
-Firmware Settings:
-# Enable extra low-level config
-# Micro Controller: SAME54P20 (SAME5x)
-# Processor Model: SAME54P20
-# Bootloader offset: 16KiB bootloader (Duet3)
-# Clock Reference: 25Mhz crystal
-# Processor Speed: 120 MHz (standard)
-# Communication: (USB to CAN bus bridge)
-# CAN bus interface: CAN bus on PB15/PB14
-# CAN speed (250k initially but then set to 1000k)
-
-make clean
-make
+make clean KCONFIG_CONFIG=config.huvud && make KCONFIG_CONFIG=config.huvud
 sudo service klipper stop
-make flash FLASH_DEVICE=/dev/serial/by-id/{the id you found above}
-sudo service klipper start
+python3 ~/katapult/scripts/flashtool.py -i can0 -u af9086bd212e -f ~/klipper/out/klipper.bin
+# config.huvud = STM32F103, 8 KiB bootloader, 8MHz crystal, CAN on PB8/PB9, 1000000
 ```
 
-
-### HUVUD Firmware:
-https://www.klipper3d.org/Bootloaders.html#stm32f103stm32f0x2-with-canboot-bootloader
+### Update Firmware on Duet Mini 5+
 
 ```sh
 cd ~/klipper
-make menuconfig
-
-Firmware Settings: (note, the canboot firmware is still set for 250K speed, operational is 1M)
-# Enable extra low-level config
-# Micro Controller: STM32
-# Processor Model: STM32F103
-# Bootloader offset: 8 KiB bootloader
-# Clock Reference: 8Mhz crystal
-# Communication: (CAN bus (on PB8/PB9))
-# CAN speed (1000k)
-
-make clean
-make
-cd lib/canboot
-python3 flash_can.py -i can0 -f ~/klipper/out/klipper.bin -u {Device ID}
+make clean KCONFIG_CONFIG=config.duet && make KCONFIG_CONFIG=config.duet
+# double tap the Duet reset button (flashing red LED = bootloader)
+make flash KCONFIG_CONFIG=config.duet FLASH_DEVICE=/dev/serial/by-id/usb-Duet3D_Duet3-Mini5+_189524355346513551202020FF0F4A15-if00
+sudo service klipper start
+# config.duet = SAME54P20, 16KiB bootloader (Duet3), 25MHz crystal, 120MHz,
+#               USB to CAN bus bridge, CAN on PB15/PB14, 1000000
 ```
 
 ## Pins For Reference
@@ -98,7 +69,7 @@ Note: "!" is for inverted select pin
 | Thermistor Pins | T0:PC0, T1:PC1, T2:PC2 |
 | Vssa Sense | PB4 |
 | Vref Sense | PB5 |
-| Current Sense resistor for drivers | .076ohm|
+| Current Sense resistor for drivers | 0.056ohm (sense_resistor value per Klipper generic-duet3-mini.cfg)|
 | SPI lines | {PD11, PC7} -> Shared SerCom#7, SPIMosi:PC12, SPIMiso:PC15, SPISCLK:PC13|
 | Vin Monitor | PC3, uses 11:1 voltage divider|
 | LED's | Diag:PA31, Act:PA30|
@@ -115,13 +86,18 @@ Note: "!" is for inverted select pin
 | Driver Diag   | {D0:PA10, D1:PB8, D2:PA22, D3:PA23, D4:PC21, D5:PB10, D6:PA27}|
 | Mux Pin  | PD0|
 
-#### Z-Axis Lead Screw Positions
-Note: Z1 and Z2 are the front of the printer, z is in the center and rear
+#### Z-Axis Lead Screw Positions (as used by `[z_tilt] z_positions`)
 | Lead Screw | Nozzle Position (X,Y) |
 | ------ | ------ |
-| Z [Center Rear]| 124.5,224 |
-| Z1 [Front Left] | 7,0|
-| Z2 [Front Right]| 245,0 |
+| stepper_z [Centre Rear] | 128.5, 224 |
+| stepper_z1 [Front Left] | 9, 20.5 |
+| stepper_z2 [Front Right] | 243.5, 20.5 |
+
+#### CoreXY belts (Klipper naming, verified with a diagonal move)
+| Belt | Motor | Klipper stepper | Duet driver |
+| ------ | ------ | ------ | ------ |
+| A | left rear | stepper_x | 1 |
+| B | right rear | stepper_y | 0 |
 
 ## License
 
